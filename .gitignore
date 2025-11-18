@@ -1,4 +1,6 @@
-*.csv
-*.tsv
-*.xls
-*.xlsx
+.venv/
+*.pyc
+__pycache__/
+*.pkl
+*.docx
+*.pdf
