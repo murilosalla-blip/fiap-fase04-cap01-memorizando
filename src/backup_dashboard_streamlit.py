@@ -13,11 +13,6 @@ REQUISITOS ATENDIDOS:
 
 Linguagem acessível para gestores do agronegócio e
 alinhado ao vídeo de apresentação solicitado pela FIAP.
-
-IR ALÉM 2 – Dashboard Analítico com Previsões (Nova aba):
-- Gráficos de correlação interativa entre variáveis.
-- Resultados de previsão em lote (real x previsto).
-- Tendência de um índice de produtividade estimado.
 """
 
 from pathlib import Path
@@ -101,48 +96,6 @@ def calcular_kpis(df: pd.DataFrame):
 
 
 # =========================
-# Função auxiliar – índice de produtividade estimado (IR ALÉM 2)
-# =========================
-def calcular_indice_produtividade(row: pd.Series) -> float:
-    """
-    Cria um índice de produtividade estimado (0 a 100) combinando:
-    - Umidade do solo (%)
-    - Chuva prevista (mm)
-    - pH do solo
-
-    Não é um valor real de produtividade, mas uma proxy didática
-    para demonstrar tendência agrícola.
-    """
-    umid = row.get("umidade_pct", np.nan)
-    ph = row.get("ph_sim", np.nan)
-    rain = row.get("rain_mm", np.nan)
-
-    # Normalização simplificada para 0–100
-    if pd.isna(umid):
-        umid_score = 0.0
-    else:
-        umid_score = float(np.clip(umid, 0, 100))  # já está em %
-
-    if pd.isna(rain):
-        rain_score = 0.0
-    else:
-        # Assume faixa típica 0–20 mm; multiplicamos por 5 e limitamos em 100
-        rain_score = float(np.clip(rain * 5, 0, 100))
-
-    if pd.isna(ph):
-        ph_score = 50.0
-    else:
-        # pH ideal ~6.5; penaliza quanto mais distante
-        ph_desvio = abs(ph - 6.5)
-        ph_score = float(np.clip(100 - (ph_desvio / 3.0) * 100, 0, 100))
-
-    # Combinação ponderada
-    indice = 0.5 * umid_score + 0.3 * rain_score + 0.2 * ph_score
-    # Normaliza para 0–100
-    return float(np.clip(indice / 100 * 100, 0, 100))
-
-
-# =========================
 # Aplicação principal
 # =========================
 def main():
@@ -193,13 +146,8 @@ def main():
     # -------------------------
     # Abas
     # -------------------------
-    aba_dados, aba_modelo, aba_simulacao, aba_ir_alem2 = st.tabs(
-        [
-            "📊 Dados & Correlação",
-            "📈 Modelo de Regressão",
-            "🤖 Simulação & Recomendações",
-            "📊 Dashboard Analítico",
-        ]
+    aba_dados, aba_modelo, aba_simulacao = st.tabs(
+        ["📊 Dados & Correlação", "📈 Modelo de Regressão", "🤖 Simulação & Recomendações"]
     )
 
     # =====================================
@@ -534,16 +482,16 @@ de Machine Learning para prever a **umidade do solo (%)**.
             **Regras de decisão usadas pelo assistente (100% determinísticas):**
 
             1. **Classificação da situação do solo**
-               - Se umidade < 40% → **🟠 Solo seco**
+               - Se umidade \< 40% → **🟠 Solo seco**
                - Se 40% ≤ umidade ≤ 60% → **🟢 Faixa adequada**
-               - Se umidade > 60% → **🔵 Solo muito úmido**
+               - Se umidade \> 60% → **🔵 Solo muito úmido**
 
             2. **Recomendação de irrigação**
-               - Se **solo seco** (umidade < 40%):
-                 - Se **probabilidade de chuva > 70%** **e** **chuva prevista ≥ 5 mm** → **⏳ Aguardar chuva**
+               - Se **solo seco** (umidade \< 40%):
+                 - Se **probabilidade de chuva \> 70%** **e** **chuva prevista ≥ 5 mm** → **⏳ Aguardar chuva**
                  - Caso contrário → **💧 Ligar irrigação**
                - Se **faixa adequada** (40%–60%) → **🔍 Monitorar**
-               - Se **solo muito úmido** (umidade > 60%) → **✅ Não irrigar**
+               - Se **solo muito úmido** (umidade \> 60%) → **✅ Não irrigar**
 
             Primeiro o modelo de IA prevê a umidade, depois essas regras fixas são aplicadas
             para gerar a recomendação.
@@ -632,190 +580,6 @@ de Machine Learning para prever a **umidade do solo (%)**.
             st.pyplot(fig)
 
             st.caption("Este sistema não substitui um agrônomo, mas oferece apoio à decisão.")
-
-    # =====================================
-    # 📊 Aba 4 – IR ALÉM 2 – Dashboard Analítico
-    # =====================================
-    with aba_ir_alem2:
-        st.subheader("📊 Dashboard analítico com previsões")
-
-        st.markdown(
-            """
-            Nesta aba, focamos especificamente nos requisitos do **IR ALÉM 2**:
-
-            - Exibir **gráficos de correlação** de forma interativa;
-            - Mostrar **resultados de previsão** do modelo em lote (real x previsto);
-            - Apresentar **tendências de produtividade**, utilizando um índice estimado
-              a partir das variáveis do campo.
-
-            Tudo isso em uma interface única, pensada para o **gestor agrícola**.
-            """
-        )
-
-        # -------------------------
-        # 1) Correlações interativas
-        # -------------------------
-        st.markdown("### 1️⃣ Gráficos de correlação entre variáveis")
-
-        st.markdown(
-            """
-            Selecione duas variáveis numéricas para visualizar a relação entre elas.
-            O gráfico de dispersão (scatter) ajuda a perceber padrões visuais e o
-            coeficiente de correlação indica o quanto as variáveis andam juntas.
-            """
-        )
-
-        numeric_cols = [
-            c for c in df_view.columns if df_view[c].dtype != "object"
-        ]
-
-        if len(numeric_cols) >= 2:
-            col_x, col_y = st.columns(2)
-            x_var = col_x.selectbox("Variável no eixo X", numeric_cols, index=0)
-            y_var = col_y.selectbox("Variável no eixo Y", numeric_cols, index=1)
-
-            corr_value = df_view[[x_var, y_var]].corr().iloc[0, 1]
-
-            st.markdown(
-                f"**Correlação de Pearson entre `{x_var}` e `{y_var}`: `{corr_value:.3f}`**"
-            )
-
-            fig, ax = plt.subplots()
-            ax.scatter(df_view[x_var], df_view[y_var], alpha=0.7)
-            ax.set_xlabel(FRIENDLY_VAR_NAMES.get(x_var, x_var))
-            ax.set_ylabel(FRIENDLY_VAR_NAMES.get(y_var, y_var))
-            ax.set_title("Relação entre variáveis (gráfico de dispersão)")
-            st.pyplot(fig)
-
-            st.markdown(
-                """
-                - Valores próximos de **+1** indicam relação direta forte.
-                - Valores próximos de **-1** indicam relação inversa forte.
-                - Valores próximos de **0** indicam pouca ou nenhuma correlação linear.
-                """
-            )
-        else:
-            st.info("Não há variáveis numéricas suficientes para montar o gráfico de correlação.")
-
-        st.markdown("---")
-
-        # -------------------------
-        # 2) Resultados de previsão em lote
-        # -------------------------
-        st.markdown("### 2️⃣ Resultados de previsão do modelo (real x previsto)")
-
-        st.markdown(
-            """
-            Aqui aplicamos o **modelo de regressão** em todos os registros da base e
-            comparamos a **umidade real medida pelos sensores** com a **umidade prevista pelo modelo**.
-            Isso caracteriza o funcionamento do **motor preditivo** dentro do dashboard.
-            """
-        )
-
-        if "umidade_pct" in df.columns:
-            try:
-                X_full = df[features_umidade].values
-                y_real = df["umidade_pct"].values
-                y_pred_full = model_umidade.predict(X_full)
-
-                from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-
-                mae_full = mean_absolute_error(y_real, y_pred_full)
-                mse_full = mean_squared_error(y_real, y_pred_full)
-                rmse_full = np.sqrt(mse_full)
-                r2_full = r2_score(y_real, y_pred_full)
-
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("MAE (base completa)", f"{mae_full:.2f}")
-                c2.metric("MSE (base completa)", f"{mse_full:.2f}")
-                c3.metric("RMSE (base completa)", f"{rmse_full:.2f}")
-                c4.metric("R² (base completa)", f"{r2_full:.2f}")
-
-                st.markdown(
-                    """
-                    O gráfico abaixo compara a umidade real com a umidade prevista
-                    para cada registro. Quanto mais próximos da linha reta de 45°,
-                    mais o modelo está “acertando” as leituras dos sensores.
-                    """
-                )
-
-                fig, ax = plt.subplots()
-                ax.scatter(y_real, y_pred_full, alpha=0.6)
-                min_val = min(y_real.min(), y_pred_full.min())
-                max_val = max(y_real.max(), y_pred_full.max())
-                ax.plot([min_val, max_val], [min_val, max_val], "r--")
-                ax.set_xlabel("Umidade real (%)")
-                ax.set_ylabel("Umidade prevista (%)")
-                ax.set_title("Real x Previsto – Modelo de umidade")
-                st.pyplot(fig)
-
-                st.markdown("#### Amostra dos resultados (real x previsto)")
-                df_result = pd.DataFrame(
-                    {
-                        "umidade_real": y_real,
-                        "umidade_prevista": y_pred_full,
-                        "erro_absoluto": np.abs(y_real - y_pred_full),
-                    }
-                )
-                st.dataframe(df_result.head(20), use_container_width=True)
-
-            except Exception as e:
-                st.error(f"Erro ao calcular previsões em lote: {e}")
-        else:
-            st.info("A coluna 'umidade_pct' não está disponível para comparar real x previsto.")
-
-        st.markdown("---")
-
-        # -------------------------
-        # 3) Tendências de produtividade estimada
-        # -------------------------
-        st.markdown("### 3️⃣ Tendências de produtividade (índice estimado)")
-
-        st.markdown(
-            """
-            Como o dataset não possui uma coluna de produtividade real, criamos um
-            **índice de produtividade estimado (0 a 100)** combinando:
-
-            - Umidade do solo (`umidade_pct`);
-            - Chuva prevista (`rain_mm`);
-            - pH do solo (`ph_sim`).
-
-            Esse índice não substitui indicadores agronômicos reais, mas permite
-            visualizar **tendências** de condições mais favoráveis ou desfavoráveis
-            à produção, ao longo dos registros.
-            """
-        )
-
-        try:
-            df_trend = df_view.copy()
-            df_trend["indice_produtividade"] = df_trend.apply(
-                calcular_indice_produtividade, axis=1
-            )
-            df_trend["registro"] = np.arange(1, len(df_trend) + 1)
-
-            c1, c2 = st.columns(2)
-            media_indice = df_trend["indice_produtividade"].mean()
-            c1.metric("Índice médio de produtividade estimada", f"{media_indice:.1f}")
-            c2.metric("Total de leituras consideradas", len(df_trend))
-
-            st.markdown(
-                """
-                O gráfico de linha abaixo mostra a evolução do índice de produtividade
-                estimada por leitura. Picos indicam combinações mais favoráveis
-                (umidade adequada, chuva e pH próximo do ideal), enquanto vales
-                indicam situações potencialmente mais críticas.
-                """
-            )
-
-            fig, ax = plt.subplots()
-            ax.plot(df_trend["registro"], df_trend["indice_produtividade"])
-            ax.set_xlabel("Registro (ordem de leitura)")
-            ax.set_ylabel("Índice de produtividade estimado (0–100)")
-            ax.set_title("Tendência do índice de produtividade estimada")
-            st.pyplot(fig)
-
-        except Exception as e:
-            st.error(f"Erro ao calcular tendência de produtividade: {e}")
 
 
 # Executar
