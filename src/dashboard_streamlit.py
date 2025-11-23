@@ -40,6 +40,7 @@ MODEL_UMIDADE_PATH = ROOT_DIR / "src" / "model_regressao_umidade.pkl"
 # Nomes amigáveis para variáveis (para gestor)
 # =========================
 FRIENDLY_VAR_NAMES = {
+    "row_id": "Identificador da leitura",
     "temp_c": "Temperatura do ar (°C)",
     "ph_sim": "pH estimado do solo",
     "limiar_on": "Limiar ON da irrigação (%)",
@@ -56,21 +57,23 @@ FRIENDLY_VAR_NAMES = {
 
 def criar_dicionario_variaveis() -> pd.DataFrame:
     """
-    Retorna o dicionário das variáveis utilizadas no modelo,
+    Retorna o dicionário das variáveis utilizadas no modelo e na visão analítica,
     em linguagem simples para gestores agrícolas.
     """
     return pd.DataFrame(
         [
-            ["temp_c", "Temperatura do ar medida no campo (°C)"],
-            ["ph_sim", "pH estimado do solo (acidez/alcalinidade)"],
-            ["limiar_on", "Umidade mínima (%) para ligar a irrigação"],
-            ["limiar_off", "Umidade máxima (%) para desligar a irrigação"],
-            ["ldr", "Leitura do sensor de luminosidade (LDR), relacionada à incidência solar"],
-            ["n_ok", "Indicador se o Nitrogênio (N) está adequado (1 = sim, 0 = não)"],
-            ["p_ok", "Indicador se o Fósforo (P) está adequado (1 = sim, 0 = não)"],
-            ["k_ok", "Indicador se o Potássio (K) está adequado (1 = sim, 0 = não)"],
-            ["rain_mm", "Chuva prevista (mm) na previsão do tempo"],
-            ["pop_pct", "Probabilidade de ocorrência de chuva (%)"],
+            ["row_id", "Identificador sequencial numérico de cada leitura de sensores na base de dados."],
+            ["temp_c", "Temperatura do ar medida no campo (°C)."],
+            ["ph_sim", "pH estimado do solo (acidez/alcalinidade)."],
+            ["limiar_on", "Umidade mínima (%) para ligar a irrigação (ponto de acionamento)."],
+            ["limiar_off", "Umidade máxima (%) para desligar a irrigação (ponto de corte)."],
+            ["ldr", "Leitura do sensor de luminosidade (LDR), relacionada à incidência solar."],
+            ["n_ok", "Indicador se o Nitrogênio (N) está adequado (1 = sim, 0 = não)."],
+            ["p_ok", "Indicador se o Fósforo (P) está adequado (1 = sim, 0 = não)."],
+            ["k_ok", "Indicador se o Potássio (K) está adequado (1 = sim, 0 = não)."],
+            ["rain_mm", "Chuva prevista (mm) na previsão do tempo."],
+            ["pop_pct", "Probabilidade de ocorrência de chuva (%)."],
+            ["umidade_pct", "Umidade do solo (%) medida pelos sensores, usada como alvo do modelo."],
         ],
         columns=["Variável", "Descrição"],
     )
@@ -136,10 +139,9 @@ def calcular_indice_produtividade(row: pd.Series) -> float:
         ph_desvio = abs(ph - 6.5)
         ph_score = float(np.clip(100 - (ph_desvio / 3.0) * 100, 0, 100))
 
-    # Combinação ponderada
+    # Combinação ponderada e corte em 0–100
     indice = 0.5 * umid_score + 0.3 * rain_score + 0.2 * ph_score
-    # Normaliza para 0–100
-    return float(np.clip(indice / 100 * 100, 0, 100))
+    return float(np.clip(indice, 0, 100))
 
 
 # =========================
@@ -222,6 +224,7 @@ def main():
             """
             Cada linha da tabela representa uma leitura dos sensores, incluindo:
 
+            - Identificador da leitura (`row_id`)
             - Temperatura do ar (`temp_c`)
             - Luminosidade do solo (`ldr`)
             - pH estimado (`ph_sim`)
@@ -283,7 +286,7 @@ def main():
             - Valores **mais próximos de zero** indicam **pouca relação**.
 
             Neste conjunto específico de dados, as correlações ficaram concentradas na região negativa,
-            sugerindo, por exemplo, que dias mais quentes e com pouca chuva tendem a secar o solo —
+            sugerindo, por exemplo, que dias mais quentes e com pouca chuva tendem a secar o solo — 
             algo que faz sentido na prática do campo.
             """
         )
@@ -641,16 +644,26 @@ de Machine Learning para prever a **umidade do solo (%)**.
 
         st.markdown(
             """
-            Nesta aba, focamos especificamente nos requisitos do **IR ALÉM 2**:
+            Nesta aba, o gestor encontra uma visão analítica consolidada do assistente agrícola, reunindo:
 
-            - Exibir **gráficos de correlação** de forma interativa;
-            - Mostrar **resultados de previsão** do modelo em lote (real x previsto);
-            - Apresentar **tendências de produtividade**, utilizando um índice estimado
-              a partir das variáveis do campo.
+            - Gráficos de correlação entre variáveis numéricas;
+            - Resultados de previsão do modelo de umidade do solo (real x previsto);
+            - Tendências de um índice de produtividade estimado ao longo das leituras.
 
-            Tudo isso em uma interface única, pensada para o **gestor agrícola**.
+            O objetivo é oferecer uma leitura mais estratégica dos dados, facilitando a tomada de decisão no campo.
             """
         )
+
+        # Dicionário de variáveis também nesta aba analítica
+        st.markdown("#### 📘 Dicionário das variáveis utilizadas nesta visão analítica")
+        st.markdown(
+            """
+            A tabela abaixo explica, em linguagem simples, o que significa cada variável
+            usada pelo modelo de Machine Learning para prever a **umidade do solo (%)**
+            e compor os indicadores exibidos nesta aba.
+            """
+        )
+        st.dataframe(criar_dicionario_variaveis(), use_container_width=True)
 
         # -------------------------
         # 1) Correlações interativas
@@ -676,6 +689,29 @@ de Machine Learning para prever a **umidade do solo (%)**.
 
             corr_value = df_view[[x_var, y_var]].corr().iloc[0, 1]
 
+            # Explicação ANTES do valor numérico da correlação
+            st.markdown(
+                 """
+                O número mostrado abaixo do seletor de variáveis é o **coeficiente de correlação de Pearson**.
+                Ele varia de **-1** a **+1** e indica o quanto as duas variáveis “andam juntas”:
+
+                - Valores próximos de **+1** indicam **relação direta forte**:  
+                  quando a variável do eixo X aumenta, a do eixo Y também tende a aumentar.  
+
+                - Valores próximos de **-1** indicam **relação inversa forte**:  
+                  quando a variável do eixo X aumenta, a do eixo Y tende a diminuir.  
+
+                - Valores próximos de **0** indicam **pouca ou nenhuma correlação linear**:  
+                  a mudança em uma variável **não ajuda** a prever o comportamento da outra de forma consistente.
+
+                Na prática, o gestor pode interpretar assim:
+                - Correlação perto de **+0,8 ou +0,9** → essas duas medidas quase sempre sobem e descem juntas.
+                - Correlação perto de **-0,8 ou -0,9** → quando uma sobe, a outra quase sempre desce.
+                - Correlação entre **-0,3 e +0,3** → relação fraca; **não é seguro tomar decisão** olhando só esse par de variáveis.
+                """
+            )
+
+            # Depois mostramos o valor específico do cruzamento X × Y
             st.markdown(
                 f"**Correlação de Pearson entre `{x_var}` e `{y_var}`: `{corr_value:.3f}`**"
             )
@@ -687,13 +723,6 @@ de Machine Learning para prever a **umidade do solo (%)**.
             ax.set_title("Relação entre variáveis (gráfico de dispersão)")
             st.pyplot(fig)
 
-            st.markdown(
-                """
-                - Valores próximos de **+1** indicam relação direta forte.
-                - Valores próximos de **-1** indicam relação inversa forte.
-                - Valores próximos de **0** indicam pouca ou nenhuma correlação linear.
-                """
-            )
         else:
             st.info("Não há variáveis numéricas suficientes para montar o gráfico de correlação.")
 
